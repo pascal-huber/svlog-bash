@@ -1,0 +1,137 @@
+#!/bin/bash
+# Author: Pascal Huber
+
+# Defaults
+services=""
+filter=".*"
+log_dir="/var/log/socklog/"
+follow=false
+plain=false
+only_current=false
+current_log_files=""
+old_log_files=""
+
+list_services(){
+  echo "Services in $log_dir:"
+  for entry in "$log_dir"*
+  do
+    echo " - $(basename "$entry")"
+  done
+}
+
+show_help(){
+	cat <<-'EOF'
+	Usage: svlog [OPTION]... [SERVICE]...
+	Display, filter and follow svlog files
+	Example: svlog --match=linux xbps kernel
+
+	Options:
+	  -c, --current                  Show only current log file(s)
+	  -f, --follow                   Print output and run tail on current log file(s)
+	  -l, --list                     List available services and exit
+	  -m PATTERN, --match=PATTERN    Show only entries which match the PATTERN
+	  -h, --help                     Output a usage message and exit
+	  -p, --plain                    Don't run \$PAGER (or "more") on output
+
+	Exit status:
+	  0  if OK,
+	  1  if specified service directory was not found,
+	  2  if an argument is invalid
+	EOF
+}
+
+# Read Options and Services
+# TODO: add option: -e PATTERN, --exclude=PATTERN
+while [ -n "$1" ]; do
+  case $1 in
+    -c|--current)
+      only_current=true
+      shift
+      ;;
+    -f|--follow)
+      plain=true
+      follow=true
+      shift
+      ;;
+    -l|--list)
+      list_services
+      exit 0
+      ;;
+    -m)
+      if [ "$#" -lt 2 ]; then
+        exit 2
+      fi
+      filter="$2"
+      shift 2
+      ;;
+    --match=*)
+      filter="${1#*=}"
+      if [ "" = "$filter" ]; then
+        exit 2
+      fi
+      shift
+      ;;
+    -h|--help)
+      show_help
+      exit 0
+      ;;
+    -p|--plain)
+      plain=true
+      shift
+      ;;
+    *)
+      services="$services $1"
+      shift
+      ;;
+  esac
+done
+
+# check arguments and argument combinations
+if [ "false" = "$plain" ] && [ "true" = "$follow" ]; then
+  echo "Can't follow files in non-plain output."
+  exit 2
+fi
+
+# if no services specified then show all services
+if [ "" = "$services" ]; then
+  current_log_files="${log_dir}/*/current"
+  if [ "false" = "$only_current" ]; then
+    old_log_files="${log_dir}/*/*.[us]"
+  fi
+fi
+
+# if services are specified, find the appropriate log files
+for service in $services; do
+	if [ -d "${log_dir}/$service" ]; then
+    current_log_files="$current_log_files ${log_dir}$service/current"
+    if [ "false" = "$only_current" ]; then
+       old_log_files="$old_log_files ${log_dir}$service/*.[us]"
+    fi
+  else
+    echo "no logs for \"$service\" found in $log_dir"
+    exit 1
+  fi
+done
+
+# configure less to jump to end of output
+pgr="$PAGER"
+if [ "$pgr" = "" ]; then
+  pgr="more"
+elif [[ "$pgr" = less* ]]; then
+  pgr="${pgr} +G -i"
+fi
+
+# get output of current log files and either print it or open pager
+# shellcheck disable=SC2086
+grep -i -h "$filter" $old_log_files $current_log_files \
+  | syslog-stripdate \
+  | sort -u \
+  | if [ "true" = "$plain" ]; then cat; else eval "$pgr"; fi
+
+# follow file changes
+if [ "true" = "$follow" ]; then
+  # shellcheck disable=SC2086
+  tail -Fq -n0 $current_log_files \
+    | syslog-stripdate \
+    | grep -i -h "$filter"
+fi
