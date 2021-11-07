@@ -7,7 +7,7 @@ filter=".*"
 log_dir="/var/log/socklog/"
 follow=false
 plain=false
-only_current=false
+only_current=true
 current_log_files=""
 old_log_files=""
 
@@ -20,32 +20,32 @@ list_services(){
 }
 
 show_help(){
-	cat <<-'EOF'
-	Usage: svlog [OPTION]... [SERVICE]...
-	Display, filter and follow svlog files
-	Example: svlog --match=linux xbps kernel
+cat <<-'EOF'
+Usage: svlog [OPTION]... [SERVICE]...
+Display, filter and follow svlog files
+Example: svlog --match=linux xbps kernel
 
-	Options:
-	  -c, --current                  Show only current log file(s)
-	  -f, --follow                   Print output and run tail on current log file(s)
-	  -l, --list                     List available services and exit
-	  -m PATTERN, --match=PATTERN    Show only entries which match the PATTERN
-	  -h, --help                     Output a usage message and exit
-	  -p, --plain                    Don't run \$PAGER (or "more") on output
+Options:
+  -a, --all                      Show all log files (not only current ones)
+  -f, --follow                   Print output and run tail on current log file(s)
+  -h, --help                     Output a usage message and exit
+  -l, --list                     List available services and exit
+  -m PATTERN, --match=PATTERN    Show only entries which match the PATTERN
+  -p, --plain                    Don't run \$PAGER (or "more") on output
 
-	Exit status:
-	  0  if OK,
-	  1  if specified service directory was not found,
-	  2  if an argument is invalid
-	EOF
+Exit status:
+  0  if OK,
+  1  if specified service directory was not found,
+  2  if an argument is invalid
+EOF
 }
 
 # Read Options and Services
 # TODO: add option: -e PATTERN, --exclude=PATTERN
 while [ -n "$1" ]; do
   case $1 in
-    -c|--current)
-      only_current=true
+    -a|--all)
+      only_current=false
       shift
       ;;
     -f|--follow)
@@ -102,7 +102,7 @@ fi
 
 # if services are specified, find the appropriate log files
 for service in $services; do
-	if [ -d "${log_dir}/$service" ]; then
+  if [ -d "${log_dir}/$service" ]; then
     current_log_files="$current_log_files ${log_dir}$service/current"
     if [ "false" = "$only_current" ]; then
        old_log_files="$old_log_files ${log_dir}$service/*.[us]"
