@@ -8,6 +8,7 @@ log_dir="/var/log/socklog/"
 follow=false
 plain=false
 only_current=true
+no_logs=false
 current_log_files=""
 old_log_files=""
 
@@ -31,6 +32,7 @@ Options:
   -h, --help                     Output a usage message and exit
   -l, --list                     List available services and exit
   -m PATTERN, --match=PATTERN    Show only entries which match the PATTERN
+  -n, --none                     Don't show any past logs (only makes sense with -f)
   -p, --plain                    Don't run \$PAGER (or "more") on output
 
 Exit status:
@@ -46,6 +48,10 @@ while [ -n "$1" ]; do
   case $1 in
     -a|--all)
       only_current=false
+      shift
+      ;;
+    -n|--none)
+      no_logs=true
       shift
       ;;
     -f|--follow)
@@ -91,6 +97,10 @@ if [ "false" = "$plain" ] && [ "true" = "$follow" ]; then
   echo "Can't follow files in non-plain output."
   exit 2
 fi
+if [ "true" = "$no_logs" ] && [ "false" = "$follow" ]; then
+  echo "Argument combination does not make any sense."
+  exit 2
+fi
 
 # if no services specified then show all services
 if [ "" = "$services" ]; then
@@ -123,10 +133,12 @@ fi
 
 # get output of current log files and either print it or open pager
 # shellcheck disable=SC2086
-grep -i -h "$filter" $old_log_files $current_log_files \
-  | syslog-stripdate \
-  | sort -u \
-  | if [ "true" = "$plain" ]; then cat; else eval "$pgr"; fi
+if [ "false" = "$no_logs" ]; then
+  grep -i -h "$filter" $old_log_files $current_log_files \
+    | syslog-stripdate \
+    | sort -u \
+    | if [ "true" = "$plain" ]; then cat; else eval "$pgr"; fi
+fi
 
 # follow file changes
 if [ "true" = "$follow" ]; then
